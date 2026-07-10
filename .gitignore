@@ -1,0 +1,19 @@
+# Virtual Environment
+/venv
+venv
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.dbsqlite3
+
+# VS Code
+.vscode/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
