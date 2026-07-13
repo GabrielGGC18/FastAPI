@@ -1,11 +1,11 @@
 from fastapi import FastAPI
-from auth_routes import router as auth_router
-from orders_routes import router as orders_router     
+from auth_routes import auth_routes as auth_router
+from orders_routes import order_routes as orders_routes    
 
 app = FastAPI()
 
 app.include_router(auth_router)
-app.include_router(orders_router)
+app.include_router(orders_routes)
 
 
 # Para Rodar 
