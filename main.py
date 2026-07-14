@@ -1,14 +1,28 @@
+"""Ponto de entrada da API.
+
+Rodar:  uvicorn main:app --reload
+Docs:   http://127.0.0.1:8000/docs
+"""
+
 from fastapi import FastAPI
-from auth_routes import auth_routes as auth_router
-from orders_routes import order_routes as orders_routes    
 
-app = FastAPI()
+from auth_routes import auth_routes
+from models import criar_banco
+from orders_routes import order_routes
 
-app.include_router(auth_router)
-app.include_router(orders_routes)
+app = FastAPI(
+    title="API de Pedidos",
+    description="Projeto de estudo: FastAPI + SQLAlchemy + JWT.",
+    version="0.2.0",
+)
+
+# Em producao isso vira migration (Alembic). Para estudo, criar na subida basta.
+criar_banco()
+
+app.include_router(auth_routes)
+app.include_router(order_routes)
 
 
-# Para Rodar 
-#Execute - uvicorn main:app --reload
-#Rest APIs da Arquitetutura REST (Get, Post, Put/Patch, Delete) - 
-# Create, Read, Update, Delete. - CRUD - É de operações para o banco de dados.
+@app.get("/", tags=["health"])
+async def home():
+    return {"mensagem": "API no ar", "docs": "/docs"}

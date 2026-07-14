@@ -1,3 +1,6 @@
+# Segredos - NUNCA commitar
+.env
+
 # Virtual Environment
 /venv
 venv
@@ -10,6 +13,9 @@ venv
 
 # VS Code
 .vscode/
+
+# Testes
+.pytest_cache/
 
 # Python cache
 __pycache__/
