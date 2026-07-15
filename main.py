@@ -6,6 +6,7 @@ Docs:   http://127.0.0.1:8000/docs
 
 from fastapi import FastAPI
 
+import os
 from auth_routes import auth_routes
 from models import criar_banco
 from orders_routes import order_routes

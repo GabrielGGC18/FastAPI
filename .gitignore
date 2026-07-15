@@ -23,3 +23,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+#Alembic
+alembic/
+*versions
+*.env.py
+*readme
