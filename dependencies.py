@@ -50,6 +50,7 @@ def _usuario_do_token(token: str, session: Session, escopo: str) -> Usuario:
         raise credenciais_invalidas
     if not usuario.ativo:
         raise HTTPException(
+            
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta desativada",
         )

@@ -69,13 +69,13 @@ class Pedido(Base):
     
     id = Column("id", Integer, primary_key=True, autoincrement=True)    
     
-    STATUS_PEDIDOS = (
-        ("PENDENTE", "PENDENTE"),
-        ("CANCELADO", "CANCELADO"),
-        ("FINALIZADO", "FINALIZADO"),
-    )
+    # STATUS_PEDIDOS = (
+    #     ("PENDENTE", "PENDENTE"),
+    #     ("CANCELADO", "CANCELADO"),
+    #     ("FINALIZADO", "FINALIZADO"),
+    # )
     
-    status = Column("status", ChoiceType(choices=STATUS_PEDIDOS), default= "PENDENTE") #pendente, cancelado ou finalizado
+    status = Column("status", String, default= "PENDENTE") #pendente, cancelado ou finalizado
     usuario =Column("usuario", ForeignKey("usuarios.id")) #É um item da tabela de usuários. 
     preco = Column("preco", Float)
     # itens =
