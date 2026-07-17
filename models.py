@@ -75,15 +75,21 @@ class Pedido(Base):
     #     ("FINALIZADO", "FINALIZADO"),
     # )
     
-    status = Column("status", String, default= "PENDENTE") #pendente, cancelado ou finalizado
-    usuario =Column("usuario", ForeignKey("usuarios.id")) #É um item da tabela de usuários. 
-    preco = Column("preco", Float)
-    # itens =
-    
-    def __init__(self, usuario, status="PENDENTE", preco=Float):
-        self.usuario = usuario
+    status = Column("status", String, default="PENDENTE")  # pendente, cancelado ou finalizado
+    usuario_id = Column("usuario_id", Integer, ForeignKey("usuarios.id"), nullable=False)
+    preco = Column("preco", Float, default=0.0)
+
+    usuario = relationship("Usuario", back_populates="pedidos")
+    itens = relationship(
+        "ItemPedido",
+        back_populates="pedido",
+        cascade="all, delete-orphan",  # apagar o pedido apaga os itens junto
+    )
+
+    def __init__(self, usuario_id, status="PENDENTE", preco=0.0):
+        self.usuario_id = usuario_id
         self.status = status
-        self.preco = preco      
+        self.preco = preco
 class ItemPedido(Base):
     __tablename__ = "itens_pedido"
 
@@ -92,11 +98,10 @@ class ItemPedido(Base):
     sabor = Column("sabor", String, nullable=False)
     tamanho = Column("tamanho", String, nullable=False)
     preco_unitario = Column("preco_unitario", Float, nullable=False)
-    pedido  = Column("pedido", Integer, ForeignKey("pedidos.id"), nullable=False)
+    pedido_id = Column("pedido_id", Integer, ForeignKey("pedidos.id"), nullable=False)
 
-#Guardamos o preco no momento da compra: se a pizzaria reajustar a tabela
-# amanha, o pedido de hoje continua valendo o preco de hoje.
-
+    # Guardamos o preco no momento da compra: se a pizzaria reajustar a tabela
+    # amanha, o pedido de hoje continua valendo o preco de hoje.
     pedido = relationship("Pedido", back_populates="itens")
 
     def __init__(self, quantidade, sabor, tamanho, preco_unitario, pedido):

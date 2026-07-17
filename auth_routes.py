@@ -2,10 +2,10 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from dependencies import pegar_sessao, verificar_refresh_token, verificar_token
-from models import Usuario
+from models import Usuario, db
 from schemas import (
     LoginSchema,
     TokenResponse,
@@ -13,29 +13,45 @@ from schemas import (
     UsuarioSchema,
 )
 from security import criar_par_de_tokens, gerar_hash_senha, verificar_senha
+from dependencies import pegar_sessao
 
 auth_routes = APIRouter(prefix="/auth", tags=["auth"])
 
-@auth_routes.get("/")
+@auth_routes.get("/criar_conta")
+async def criar_conta(email:str, senha:str, nome:str,session=Depends(pegar_sessao)):
+        """busca o usuario e confere a senha"""
+        Session = sessionmaker(bind=db)
+        session = Session()
+        usuario = session.query(Usuario).filter(Usuario.email==email).first()
+        if usuario:
+            #já existe um usuário com o email
+            return{"Já existe um usuário com este email!!!!!!"}
+        else:
+            senha_criptografada = gerar_hash_senha(senha)
+            novo_usuario = Usuario(nome, email, senha_criptografada)
+            session.add(novo_usuario)
+            session.commit()
+            return{"Mensagem": "Usuário Cadastrado com sucesso"}
+        
+          
+# autenticar(email: str, senha: str, session: Session) -> Usuario:
+#     """Busca o usuario e confere a senha.
 
-async def _autenticar(email: str, senha: str, session: Session) -> Usuario:
-    """Busca o usuario e confere a senha.
+#     Mesma mensagem de erro para "e-mail nao existe" e "senha errada": entregar
+#     erros diferentes deixa um atacante descobrir quais e-mails estao cadastrados.
+#     """
+#     usuario = session.query(Usuario).filter(Usuario.email == email).first()
 
-    Mesma mensagem de erro para "e-mail nao existe" e "senha errada": entregar
-    erros diferentes deixa um atacante descobrir quais e-mails estao cadastrados.
-    """
-    usuario = session.query(Usuario).filter(Usuario.email == email).first()
+#     if not usuario or not verificar_senha(senha, usuario.senha):
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Credenciais invalidas",
+#         )
 
-    if not usuario or not verificar_senha(senha, usuario.senha):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciais invalidas",
-        )
-
-    return usuario
+#     return usuario
 
 # @auth_routes.post(
-#     "/criar_conta",
+# "/criar_conta",
 #     response_model=UsuarioResponse,
 #     status_code=status.HTTP_201_CREATED,
 # )

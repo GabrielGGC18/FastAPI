@@ -26,13 +26,14 @@ def pegar_sessao():
     O `yield` faz disso um generator dependency: o que vem depois dele roda
     quando a resposta ja foi enviada — inclusive se a rota lancou excecao.
     """
-    session = SessionLocal()
-    try:
+    try:    
+        Session = sessionmaker(bind=db)
+        session = Session()
         yield session
-    finally:
+    finally: 
         session.close()
-
-
+    
+    
 def _usuario_do_token(token: str, session: Session, escopo: str) -> Usuario:
     credenciais_invalidas = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
