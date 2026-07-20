@@ -4,6 +4,8 @@ Rodar:  uvicorn main:app --reload
 Docs:   http://127.0.0.1:8000/docs
 """
 
+import os
+
 from fastapi import FastAPI
 
 from auth_routes import criar_conta, auth_routes
@@ -21,6 +23,8 @@ criar_banco()
 
 app.include_router(auth_routes)
 app.include_router(order_routes)
+
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 
 @app.get("/", tags=["health"])
