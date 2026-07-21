@@ -3,9 +3,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session, sessionmaker
-
+from schemas import UsuarioSchema
 from dependencies import pegar_sessao, verificar_refresh_token, verificar_token
+
 from models import Usuario, db
+
 from schemas import (
     LoginSchema,
     TokenResponse,
@@ -18,24 +20,37 @@ from dependencies import pegar_sessao
 auth_routes = APIRouter(prefix="/auth", tags=["auth"])
 
 @auth_routes.get("/criar_conta")
-async def criar_conta(email:str, senha:str, nome:str,session=Depends(pegar_sessao)):
+async def criar_conta(usuario_schema: UsuarioSchema,session=Depends(pegar_sessao)):
         """busca o usuario e confere a senha"""
         Session = sessionmaker(bind=db)
         session = Session()
-        usuario = session.query(Usuario).filter(Usuario.email==email).first()
+        usuario = session.query(Usuario).filter(Usuario.email==usuario_schema.email).first()
         if usuario:
             #já existe um usuário com o email
-            raise HTTPException(status_code=400)
-            return{"Já existe um usuário com este email!!!!!!"}
+            raise HTTPException(status_code=400, detail="Já existe um usuário com este email!!!!!!")
         
         else:
-            senha_criptografada = gerar_hash_senha(senha)
-            novo_usuario = Usuario(nome, email, senha_criptografada)
+            senha_criptografada = gerar_hash_senha(usuario_schema.senha)
+            novo_usuario = Usuario(usuario_schema.nome,usuario_schema.email, senha_criptografada, usuario_schema.ativo, usuario_schema.admin)
             session.add(novo_usuario)
             session.commit()
-            return{"Mensagem": "Usuário Cadastrado com sucesso"}
+            return{"Mensagem": f"Usuário Cadastrado com sucesso {usuario_schema.email}"}
         
-          
+@auth_routes.post("/criar_conta")
+async def criar_conta(usuario_schema: UsuarioSchema,session=Depends(pegar_sessao)):
+        """busca o usuario e confere a senha"""
+     
+        usuario = session.query(Usuario).filter(Usuario.email==usuario_schema.email).first()
+        if usuario:
+            #já existe um usuário com o email
+            raise HTTPException(status_code=400, detail="Já existe um usuário com este email!!!!!!")
+        
+        else:
+            senha_criptografada = gerar_hash_senha(usuario_schema.senha)
+            novo_usuario = Usuario(usuario_schema.nome,usuario_schema.email, senha_criptografada, usuario_schema.ativo, usuario_schema.admin)
+            session.add(novo_usuario)
+            session.commit()
+            return{"Mensagem": f"Usuário Cadastrado com sucesso {usuario_schema.email}"}
 # autenticar(email: str, senha: str, session: Session) -> Usuario:
 #     """Busca o usuario e confere a senha.
 

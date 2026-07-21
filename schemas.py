@@ -13,18 +13,16 @@ from models import StatusPedido
 
 
 # ---------------------------------------------------------------- Usuario
-
-
 class UsuarioSchema(BaseModel):
-    """Corpo esperado no cadastro (`POST /auth/criar_conta`)."""
-
+    """Como o usuario entra na API. Repare: nao tem o campo `id`"""
     nome: str
-    email: EmailStr  # valida formato de e-mail de graca
-    senha: str = Field(min_length=6)
-    ativo: Optional[bool] = True
+    email: str
+    senha: str
+    ativo : Optional[bool] = True
     admin: Optional[bool] = False
-
-
+    
+    class Config:
+        model_config = True
 class UsuarioResponse(BaseModel):
     """Como o usuario sai da API. Repare: nao tem o campo `senha`."""
 
@@ -74,6 +72,8 @@ class PedidoSchema(BaseModel):
     """
 
     usuario_id: Optional[int] = None
+
+    model_config = {"from_attributes": True}
 
 
 class PedidoResponse(BaseModel):
