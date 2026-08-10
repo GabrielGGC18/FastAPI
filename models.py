@@ -39,6 +39,11 @@ class StatusPedido(str, enum.Enum):
     da resposta, em vez de virar um objeto.
     """
 
+    PENDENTE = "PENDENTE"
+    CANCELADO = "CANCELADO"
+    FINALIZADO = "FINALIZADO"
+
+
 class Usuario(Base):
     __tablename__ = "usuarios"
 
@@ -65,17 +70,16 @@ class Usuario(Base):
         self.admin = admin
         
 class Pedido(Base):
-    __tablename__ = "pedidos" 
-    
-    id = Column("id", Integer, primary_key=True, autoincrement=True)    
-    
-    # STATUS_PEDIDOS = (
-    #     ("PENDENTE", "PENDENTE"),
-    #     ("CANCELADO", "CANCELADO"),
-    #     ("FINALIZADO", "FINALIZADO"),
-    # )
-    
-    status = Column("status", String, default="PENDENTE")  # pendente, cancelado ou finalizado
+    __tablename__ = "pedidos"
+
+    id = Column("id", Integer, primary_key=True, autoincrement=True)
+    # Enum no lugar de String: o banco passa a rejeitar status invalido.
+    status = Column(
+        "status",
+        Enum(StatusPedido),
+        default=StatusPedido.PENDENTE,
+        nullable=False,
+    )
     usuario_id = Column("usuario_id", Integer, ForeignKey("usuarios.id"), nullable=False)
     preco = Column("preco", Float, default=0.0)
 
@@ -86,10 +90,21 @@ class Pedido(Base):
         cascade="all, delete-orphan",  # apagar o pedido apaga os itens junto
     )
 
-    def __init__(self, usuario_id, status="PENDENTE", preco=0.0):
+    def __init__(self, usuario_id, status=StatusPedido.PENDENTE, preco=0.0):
         self.usuario_id = usuario_id
         self.status = status
         self.preco = preco
+
+    def calcular_preco(self):
+        """Recalcula o total a partir dos itens.
+
+        Preco e dado derivado: nunca aceite ele do cliente, sempre recalcule
+        no servidor apos qualquer mudanca na lista de itens.
+        """
+        self.preco = sum(item.preco_unitario * item.quantidade for item in self.itens)
+        return self.preco
+
+
 class ItemPedido(Base):
     __tablename__ = "itens_pedido"
 
@@ -104,12 +119,12 @@ class ItemPedido(Base):
     # amanha, o pedido de hoje continua valendo o preco de hoje.
     pedido = relationship("Pedido", back_populates="itens")
 
-    def __init__(self, quantidade, sabor, tamanho, preco_unitario, pedido):
+    def __init__(self, quantidade, sabor, tamanho, preco_unitario, pedido_id):
         self.quantidade = quantidade
         self.sabor = sabor
         self.tamanho = tamanho
         self.preco_unitario = preco_unitario
-        self.pedido = pedido
+        self.pedido_id = pedido_id
 
 
 def criar_banco():
@@ -124,40 +139,3 @@ def criar_banco():
 if __name__ == "__main__":
     criar_banco()
     print("Banco criado em banco.db")
-
-               
-        
-# class Pedido(Base):
-#     __tablename__ = "pedidos"
-
-#     id = Column("id", Integer, primary_key=True, autoincrement=True)
-#     status = Column(
-#         "status",
-#         Enum(StatusPedido),
-#         default=StatusPedido.PENDENTE,
-#         nullable=False,
-#     )
-#     usuario_id = Column("usuario_id", Integer, ForeignKey("usuarios.id"), nullable=False)
-#     preco = Column("preco", Float, default=0.0)
-
-#     usuario = relationship("Usuario", back_populates="pedidos")
-#     itens = relationship(
-#         "ItemPedido",
-#         back_populates="pedido",
-#         cascade="all, delete-orphan",  # apagar o pedido apaga os itens junto
-#     )
-
-#     def __init__(self, usuario_id, status=StatusPedido.PENDENTE, preco=0.0):
-#         self.usuario_id = usuario_id
-#         self.status = status
-#         self.preco = preco
-
-#     def calcular_preco(self):
-#         """Recalcula o total a partir dos itens.
-
-#         Preco e dado derivado: nunca aceite ele do cliente, sempre recalcule
-#         no servidor apos qualquer mudanca na lista de itens.
-#         """
-#         self.preco = sum(item.preco_unitario * item.quantidade for item in self.itens)
-#         return self.preco 
-
