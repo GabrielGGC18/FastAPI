@@ -19,38 +19,84 @@ from dependencies import pegar_sessao
 
 auth_routes = APIRouter(prefix="/auth", tags=["auth"])
 
-@auth_routes.get("/criar_conta")
-async def criar_conta(usuario_schema: UsuarioSchema,session=Depends(pegar_sessao)):
-        """busca o usuario e confere a senha"""
-        Session = sessionmaker(bind=db)
-        session = Session()
-        usuario = session.query(Usuario).filter(Usuario.email==usuario_schema.email).first()
-        if usuario:
-            #já existe um usuário com o email
-            raise HTTPException(status_code=400, detail="Já existe um usuário com este email!!!!!!")
+@auth_routes.post("/criar_conta", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
+async def criar_conta(usuario_schema: UsuarioSchema, session: Session = Depends(pegar_sessao)):
+    """Função para criar uma nova conta de usuário. A senha é armazenada como hash bcrypt."""
+    usuario_existente = session.query(Usuario).filter(Usuario.email == usuario_schema.email).first()
+    
+    if usuario_existente:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Já Existe um usuário com esse e-mail",
+        )
         
-        else:
-            senha_criptografada = gerar_hash_senha(usuario_schema.senha)
-            novo_usuario = Usuario(usuario_schema.nome,usuario_schema.email, senha_criptografada, usuario_schema.ativo, usuario_schema.admin)
-            session.add(novo_usuario)
-            session.commit()
-            return{"Mensagem": f"Usuário Cadastrado com sucesso {usuario_schema.email}"}
-        
-@auth_routes.post("/criar_conta")
-async def criar_conta(usuario_schema: UsuarioSchema,session=Depends(pegar_sessao)):
-        """busca o usuario e confere a senha"""
-     
-        usuario = session.query(Usuario).filter(Usuario.email==usuario_schema.email).first()
-        if usuario:
-            #já existe um usuário com o email
-            raise HTTPException(status_code=400, detail="Já existe um usuário com este email!!!!!!")
-        
-        else:
-            senha_criptografada = gerar_hash_senha(usuario_schema.senha)
-            novo_usuario = Usuario(usuario_schema.nome,usuario_schema.email, senha_criptografada, usuario_schema.ativo, usuario_schema.admin)
-            session.add(novo_usuario)
-            session.commit()
-            return{"Mensagem": f"Usuário Cadastrado com sucesso {usuario_schema.email}"}
+    novo_usuario = Usuario(
+        nome=usuario_schema.nome,
+        email=usuario_schema.email,
+        senha=gerar_hash_senha(usuario_schema.senha),
+        ativo=usuario_schema.ativo,
+        admin=usuario_schema.admin,
+    ) 
+    session.add(novo_usuario)
+    session.commit()
+    session.refresh(novo_usuario)
+    
+    return novo_usuario
+#Função privada para autenticar o usuário com base no e-mail. 
+def _autenticar(email: str, senha: str, session: Session) -> Usuario:
+    """Busca o usuário e verifica a senha"""
+    usuario = session.query(Usuario).filter(Usuario.email == email).first()
+    
+    if not usuario or not verificar_senha(senha, usuario.senha):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas",
+        )
+    return usuario
+
+@auth_routes.post("/login", response_model=TokenResponse)
+async def login(login_schema: LoginSchema, session: Session = Depends(pegar_sessao)):
+    """Login via JSON. Devolvendo acess token + refresh token."""
+    usuario = _autenticar(login_schema.email, login_schema.senha, session)
+    access_token, refresh_token = criar_par_de_tokens(usuario.id)
+    
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # autenticar(email: str, senha: str, session: Session) -> Usuario:
 #     """Busca o usuario e confere a senha.
 
