@@ -402,3 +402,5 @@ geralmente nao implementou logout ainda.
 esta usando uma copia antiga). A resposta certa e revogar **todos** os tokens daquele
 usuario e forcar login.
 </details>
+
+claude --resume 310393e5-a4b3-4db5-ab42-fd14009ea0fd
