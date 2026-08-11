@@ -1,5 +1,6 @@
 # Segredos - NUNCA commitar
 .env
+.env.example/
 
 # Virtual Environment
 /venv
