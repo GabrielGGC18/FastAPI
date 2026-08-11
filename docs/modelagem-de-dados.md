@@ -277,7 +277,8 @@ alembic upgrade head
 ```
 
 Cada mudanca de schema vira um arquivo de migration com `upgrade()` e `downgrade()`.
-Fica de exercicio (ver [exercicios.md](exercicios.md), #10).
+Ja feito neste projeto (ver [exercicios.md](exercicios.md), #10 no gabarito) — `main.py`
+nao chama mais `criar_banco()`.
 
 ---
 

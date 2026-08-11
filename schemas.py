@@ -17,7 +17,7 @@ class UsuarioSchema(BaseModel):
     """Como o usuario entra na API. Repare: nao tem o campo `id`"""
     nome: str
     email: str
-    senha: str
+    senha: str = Field(..., min_length=6, description="Senha precisa ter pelo menos 6 caracteres")
     ativo : Optional[bool] = True
     admin: Optional[bool] = False
     

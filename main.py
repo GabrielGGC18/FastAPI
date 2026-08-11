@@ -9,7 +9,7 @@ import os
 from fastapi import FastAPI
 
 from auth_routes import criar_conta, auth_routes
-from models import criar_banco
+# from models import criar_banco -Já usando alembic, nao precisa mais criar banco na subida.
 from orders_routes import order_routes
 
 app = FastAPI(
@@ -19,7 +19,7 @@ app = FastAPI(
 )
 
 # Em producao isso vira migration (Alembic). Para estudo, criar na subida basta.
-criar_banco()
+# criar_banco() - Não precisa mais criar banco na subida, já que estamos usando alembic.
 
 app.include_router(auth_routes)
 app.include_router(order_routes)

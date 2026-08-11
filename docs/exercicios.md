@@ -328,6 +328,23 @@ Regra: **valide na borda para dar erro bom, e no banco para garantir que e verda
 </details>
 
 <details>
+<summary><b>10. Alembic</b></summary>
+
+Feito neste projeto: `alembic/versions/8ecfc31b6595_schema_inicial.py` e a migration
+inicial, gerada por autogenerate a partir dos models atuais.
+
+```bash
+rm banco.db                                        # comeca do zero, sem create_all
+alembic revision --autogenerate -m "schema inicial"
+alembic upgrade head
+```
+
+`main.py` nao chama mais `criar_banco()` — ficou comentado la, so como referencia. O
+banco agora só nasce ou muda via `alembic upgrade head`. Proxima coluna nova (ex:
+exercicio 5, `criado_em`) vira uma migration nova, nao um `rm banco.db`.
+</details>
+
+<details>
 <summary><b>11. Testes com banco em memoria</b></summary>
 
 ```python

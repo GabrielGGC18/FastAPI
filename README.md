@@ -17,12 +17,27 @@ uvicorn main:app --reload
 
 Docs interativas: <http://127.0.0.1:8000/docs>
 
+## Migrations (Alembic)
+
+O banco nao nasce mais via `Base.metadata.create_all()`. Toda mudanca de schema
+vira migration, aplicada explicitamente:
+
+```bash
+alembic upgrade head              # aplica migrations pendentes, cria/atualiza banco.db
+alembic revision --autogenerate -m "descricao da mudanca"   # gera migration a partir dos models
+alembic current                   # mostra em que migration o banco esta
+```
+
+`criar_banco()` em `models.py` ficou como referencia comentada em `main.py` —
+nao e mais chamado.
+
 ## Estrutura
 
 | Arquivo             | Responsabilidade                                              |
 | ------------------- | ------------------------------------------------------------- |
 | `models.py`         | Tabelas SQLAlchemy: `Usuario`, `Pedido`, `ItemPedido`         |
 | `schemas.py`        | Contratos Pydantic de entrada/saida da API                    |
+| `settings.py`       | Config via pydantic-settings, le variaveis do `.env`          |
 | `security.py`       | Hash de senha (bcrypt) e emissao/leitura de JWT               |
 | `dependencies.py`   | `Depends`: sessao de banco, token, admin                      |
 | `auth_routes.py`    | `/auth` — cadastro, login, refresh                            |

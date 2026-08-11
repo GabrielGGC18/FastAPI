@@ -176,4 +176,4 @@ async def finalizar_pedido(
 
     return ResponseMensagem(
         mensagem=f"Pedido {pedido.id} finalizado. Total: R$ {pedido.preco:.2f}"
-    )
+    )   

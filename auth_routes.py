@@ -61,4 +61,12 @@ async def login(login_schema: LoginSchema, session: Session = Depends(pegar_sess
     access_token, refresh_token = criar_par_de_tokens(usuario.id)
     
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
-  
+
+@auth_routes.post("/refresh", response_model=TokenResponse)
+async def refresh_token(usuario: Usuario = Depends(verificar_refresh_token)):
+    """Recebe refresh token e devolve novo par de tokens."""
+    par_de_tokens = criar_par_de_tokens(usuario.id)
+
+    return TokenResponse(access_token=par_de_tokens[0], refresh_token=par_de_tokens[1])
+    
+    

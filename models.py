@@ -23,11 +23,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy_utils import ChoiceType
+from settings import Settings
 
 # Conexao com o banco. `echo=False` para nao poluir o terminal;
 # troque para True quando quiser ver o SQL que o SQLAlchemy gera.
+settings = Settings()
 db = create_engine("sqlite:///banco.db", echo=False)
-
 # Base declarativa: toda classe que herda dela vira uma tabela.
 Base = declarative_base()
 
