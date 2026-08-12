@@ -10,7 +10,6 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 from models import StatusPedido
-
 # ---------------------------------------------------------------- Usuario
 class UsuarioSchema(BaseModel):
     """Como o usuario entra na API. Repare: nao tem o campo `id`"""
@@ -91,4 +90,9 @@ class ResponseMensagem(BaseModel):
 class FilterPage(BaseModel):
     offset: int = Field(0, ge=0)
     limit: int = Field(100, le=100)
-    
+
+class ItemPedidoUpdate(BaseModel):
+    quantidade: Optional[int] = Field(None, gt=0)
+    sabor: Optional[str] = None
+    tamanho: Optional[str] = None
+    preco_unitario: Optional[float] = Field(None, gt=0)

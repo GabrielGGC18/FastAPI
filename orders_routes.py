@@ -12,6 +12,7 @@ from dependencies import pegar_sessao, verificar_token
 from models import ItemPedido, Pedido, StatusPedido, Usuario
 from schemas import (
     ItemPedidoSchema,
+    ItemPedidoUpdate,
     PedidoResponse,
     PedidoSchema,
     ResponseMensagem,
@@ -184,3 +185,32 @@ async def finalizar_pedido(
     return ResponseMensagem(
         mensagem=f"Pedido {pedido.id} finalizado. Total: R$ {pedido.preco:.2f}"
     )
+@order_routes.patch("/itens/{id_item}", response_model=PedidoResponse)
+async def atualizar_item(
+    id_item: int,
+    item_update: ItemPedidoUpdate,
+    session: Annotated[AsyncSession, Depends(pegar_sessao)],
+    usuario: Annotated[Usuario, Depends(verificar_token)],
+):
+    item = await session.scalar(select(ItemPedido).where(ItemPedido.id == id_item))
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item não encontrado",
+        )
+
+    pedido = await _pedido_autorizado(item.pedido_id, session, usuario)
+    _exigir_pendente(pedido)
+
+    # Atualiza apenas os campos fornecidos
+    for field, value in item_update.dict(exclude_unset=True).items():
+        setattr(item, field, value)
+
+    await session.flush()
+    await session.refresh(pedido)
+
+    pedido.calcular_preco()
+    await session.commit()
+    await session.refresh(pedido)
+
+    return pedido
