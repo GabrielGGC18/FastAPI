@@ -72,4 +72,6 @@ async def refresh_token(usuario: Annotated[Usuario, Depends(verificar_refresh_to
 
     return TokenResponse(access_token=par_de_tokens[0], refresh_token=par_de_tokens[1])
     
-    
+@auth_routes.get("/eu", response_model=UsuarioResponse)
+async def eu(usuario: Annotated[Usuario, Depends(verificar_token)]):
+    return usuario

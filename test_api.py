@@ -16,7 +16,16 @@ from dependencies import pegar_sessao
 from main import app
 from models import Base
 
+import factory
+from freezegun import freeze_time
+class UsuarioFactory(factory.Factory):
+    class Meta:
+        model = dict #Gera um dicionário simples em vez de um objeto ORM(sqlalchemy) - Vamos usar só para montar o payload do POST
 
+    nome = factory.Sequence(lambda n : f"usuario{n}")
+    email = factory.Sequence(lambda n: f"usuario{n}@teste.com")
+    senha = "senha123"
+    admin = False
 @pytest_asyncio.fixture
 async def client():
     engine = create_async_engine(
@@ -270,3 +279,11 @@ async def test_usuario_comum_nao_cria_pedido_para_outro(client):
 
     resposta = await client.post("/pedidos/", json={"usuario_id": 1}, headers=intruso)
     assert resposta.status_code == 403
+
+async def test_token_expirado_da_401(client):
+    with freeze_time("2026-01-01 12:00:00"):
+        headers = await criar_e_logar(client)
+    with freeze_time("2026-01-01 12:31:00"):
+        resposta = await client.get("/auth/eu", headers=headers)
+    assert resposta.status_code == 401
+        
