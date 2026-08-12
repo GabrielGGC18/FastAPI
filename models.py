@@ -19,16 +19,16 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
-    create_engine,
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy_utils import ChoiceType
 from settings import Settings
+from sqlalchemy.ext.asyncio import create_async_engine
 
 # Conexao com o banco. `echo=False` para nao poluir o terminal;
 # troque para True quando quiser ver o SQL que o SQLAlchemy gera.
 settings = Settings()
-db = create_engine("sqlite:///banco.db", echo=False)
+db = create_async_engine(settings.DATABASE_URL, echo=False)
 # Base declarativa: toda classe que herda dela vira uma tabela.
 Base = declarative_base()
 
@@ -89,6 +89,7 @@ class Pedido(Base):
         "ItemPedido",
         back_populates="pedido",
         cascade="all, delete-orphan",  # apagar o pedido apaga os itens junto
+        lazy="selectin",  # AsyncSession nao suporta lazy-load implicito na serializacao
     )
 
     def __init__(self, usuario_id, status=StatusPedido.PENDENTE, preco=0.0):

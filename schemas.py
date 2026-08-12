@@ -11,7 +11,6 @@ from pydantic import BaseModel, EmailStr, Field
 
 from models import StatusPedido
 
-
 # ---------------------------------------------------------------- Usuario
 class UsuarioSchema(BaseModel):
     """Como o usuario entra na API. Repare: nao tem o campo `id`"""
@@ -88,3 +87,8 @@ class PedidoResponse(BaseModel):
 
 class ResponseMensagem(BaseModel):
     mensagem: str
+
+class FilterPage(BaseModel):
+    offset: int = Field(0, ge=0)
+    limit: int = Field(100, le=100)
+    
