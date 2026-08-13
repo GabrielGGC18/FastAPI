@@ -18,9 +18,8 @@ class UsuarioSchema(BaseModel):
     senha: str = Field(..., min_length=6, description="Senha precisa ter pelo menos 6 caracteres")
     ativo : Optional[bool] = True
     admin: Optional[bool] = False
-    
-    class Config:
-        model_config = True
+
+
 class UsuarioResponse(BaseModel):
     """Como o usuario sai da API. Repare: nao tem o campo `senha`."""
 
@@ -54,12 +53,55 @@ class ItemPedidoSchema(BaseModel):
     sabor: str
     tamanho: str
     preco_unitario: float = Field(gt=0)
+    observacao: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
 
 class ItemPedidoResponse(ItemPedidoSchema):
     id: int
+
+
+class AplicarCupomSchema(BaseModel):
+    codigo: str
+
+
+class CupomSchema(BaseModel):
+    codigo: str
+    percentual_desconto: float = Field(gt=0, le=100)
+
+
+class CupomResponse(CupomSchema):
+    id: int
+    ativo: bool
+
+    model_config = {"from_attributes": True}
+
+
+class ItemTemplateSchema(BaseModel):
+    quantidade: int = Field(gt=0)
+    sabor: str
+    tamanho: str
+    preco_unitario: float = Field(gt=0)
+
+    model_config = {"from_attributes": True}
+
+
+class ItemTemplateResponse(ItemTemplateSchema):
+    id: int
+
+
+class PedidoTemplateSchema(BaseModel):
+    nome: str
+    itens: list[ItemTemplateSchema]
+
+
+class PedidoTemplateResponse(BaseModel):
+    id: int
+    nome: str
+    itens: list[ItemTemplateResponse] = []
+
+    model_config = {"from_attributes": True}
 
 
 class PedidoSchema(BaseModel):
@@ -79,6 +121,7 @@ class PedidoResponse(BaseModel):
     status: StatusPedido
     preco: float
     usuario_id: int
+    cupom_codigo: Optional[str] = None
     itens: list[ItemPedidoResponse] = []
 
     model_config = {"from_attributes": True}
@@ -96,3 +139,4 @@ class ItemPedidoUpdate(BaseModel):
     sabor: Optional[str] = None
     tamanho: Optional[str] = None
     preco_unitario: Optional[float] = Field(None, gt=0)
+    observacao: Optional[str] = None

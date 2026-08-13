@@ -280,6 +280,242 @@ async def test_usuario_comum_nao_cria_pedido_para_outro(client):
     resposta = await client.post("/pedidos/", json={"usuario_id": 1}, headers=intruso)
     assert resposta.status_code == 403
 
+@pytest.mark.asyncio
+async def test_atualizar_item_altera_so_campos_enviados(client):
+    headers = await criar_e_logar(client)
+    resposta = await client.post("/pedidos/", json={}, headers=headers)
+    pedido = resposta.json()
+
+    resposta = await client.post(
+        f"/pedidos/{pedido['id']}/itens",
+        json={"quantidade": 2, "sabor": "Calabresa", "tamanho": "M", "preco_unitario": 40.0},
+        headers=headers,
+    )
+    id_item = resposta.json()["itens"][0]["id"]
+
+    resposta = await client.patch(
+        f"/pedidos/itens/{id_item}", json={"quantidade": 3}, headers=headers
+    )
+    assert resposta.status_code == 200
+    item = resposta.json()["itens"][0]
+    assert item["quantidade"] == 3
+    assert item["sabor"] == "Calabresa"  # nao enviado, permanece igual
+    assert resposta.json()["preco"] == 120.0  # 3 * 40.0, recalculado
+
+
+@pytest.mark.asyncio
+async def test_atualizar_item_de_outro_usuario_da_403(client):
+    dono = await criar_e_logar(client, email="dono@teste.com")
+    resposta = await client.post("/pedidos/", json={}, headers=dono)
+    pedido = resposta.json()
+    resposta = await client.post(
+        f"/pedidos/{pedido['id']}/itens",
+        json={"quantidade": 1, "sabor": "X", "tamanho": "P", "preco_unitario": 10.0},
+        headers=dono,
+    )
+    id_item = resposta.json()["itens"][0]["id"]
+
+    intruso = await criar_e_logar(client, email="intruso@teste.com")
+    resposta = await client.patch(
+        f"/pedidos/itens/{id_item}", json={"quantidade": 5}, headers=intruso
+    )
+    assert resposta.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_item_com_observacao(client):
+    headers = await criar_e_logar(client)
+    pedido = (await client.post("/pedidos/", json={}, headers=headers)).json()
+    resposta = await client.post(
+        f"/pedidos/{pedido['id']}/itens",
+        json={
+            "quantidade": 1,
+            "sabor": "X",
+            "tamanho": "M",
+            "preco_unitario": 30.0,
+            "observacao": "sem cebola",
+        },
+        headers=headers,
+    )
+    assert resposta.json()["itens"][0]["observacao"] == "sem cebola"
+
+
+@pytest.mark.asyncio
+async def test_duplicar_pedido_clona_itens(client):
+    headers = await criar_e_logar(client)
+    pedido = (await client.post("/pedidos/", json={}, headers=headers)).json()
+    await client.post(
+        f"/pedidos/{pedido['id']}/itens",
+        json={"quantidade": 2, "sabor": "X", "tamanho": "M", "preco_unitario": 20.0},
+        headers=headers,
+    )
+    resposta = await client.post(f"/pedidos/{pedido['id']}/duplicar", headers=headers)
+    assert resposta.status_code == 201
+    novo = resposta.json()
+    assert novo["id"] != pedido["id"]
+    assert novo["status"] == "PENDENTE"
+    assert len(novo["itens"]) == 1
+    assert novo["preco"] == 40.0
+
+
+@pytest.mark.asyncio
+async def test_duplicar_pedido_de_outro_da_403(client):
+    dono = await criar_e_logar(client, email="dono@teste.com")
+    pedido = (await client.post("/pedidos/", json={}, headers=dono)).json()
+    intruso = await criar_e_logar(client, email="intruso@teste.com")
+    resposta = await client.post(f"/pedidos/{pedido['id']}/duplicar", headers=intruso)
+    assert resposta.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_cupom_aplica_desconto(client):
+    admin = await criar_e_logar(client, email="admin@teste.com", admin=True)
+    await client.post(
+        "/pedidos/cupons", json={"codigo": "PROMO10", "percentual_desconto": 10}, headers=admin
+    )
+
+    headers = await criar_e_logar(client, email="cliente@teste.com")
+    pedido = (await client.post("/pedidos/", json={}, headers=headers)).json()
+    await client.post(
+        f"/pedidos/{pedido['id']}/itens",
+        json={"quantidade": 1, "sabor": "X", "tamanho": "M", "preco_unitario": 100.0},
+        headers=headers,
+    )
+    resposta = await client.post(
+        f"/pedidos/{pedido['id']}/aplicar-cupom", json={"codigo": "PROMO10"}, headers=headers
+    )
+    assert resposta.status_code == 200
+    assert resposta.json()["preco"] == 90.0
+
+
+@pytest.mark.asyncio
+async def test_cupom_invalido_da_404(client):
+    headers = await criar_e_logar(client)
+    pedido = (await client.post("/pedidos/", json={}, headers=headers)).json()
+    resposta = await client.post(
+        f"/pedidos/{pedido['id']}/aplicar-cupom", json={"codigo": "NAOEXISTE"}, headers=headers
+    )
+    assert resposta.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_criar_cupom_exige_admin(client):
+    headers = await criar_e_logar(client)
+    resposta = await client.post(
+        "/pedidos/cupons", json={"codigo": "X", "percentual_desconto": 5}, headers=headers
+    )
+    assert resposta.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_template_criar_e_usar(client):
+    headers = await criar_e_logar(client)
+    resposta = await client.post(
+        "/pedidos/templates",
+        json={
+            "nome": "Combo favorito",
+            "itens": [
+                {"quantidade": 1, "sabor": "Calabresa", "tamanho": "G", "preco_unitario": 45.0}
+            ],
+        },
+        headers=headers,
+    )
+    assert resposta.status_code == 201
+    template = resposta.json()
+
+    listagem = await client.get("/pedidos/templates", headers=headers)
+    assert len(listagem.json()) == 1
+
+    resposta = await client.post(f"/pedidos/templates/{template['id']}/usar", headers=headers)
+    assert resposta.status_code == 201
+    pedido = resposta.json()
+    assert pedido["status"] == "PENDENTE"
+    assert len(pedido["itens"]) == 1
+    assert pedido["preco"] == 45.0
+
+
+@pytest.mark.asyncio
+async def test_template_de_outro_usuario_da_403(client):
+    dono = await criar_e_logar(client, email="dono@teste.com")
+    template = (
+        await client.post(
+            "/pedidos/templates",
+            json={"nome": "T", "itens": [{"quantidade": 1, "sabor": "X", "tamanho": "P", "preco_unitario": 10.0}]},
+            headers=dono,
+        )
+    ).json()
+
+    intruso = await criar_e_logar(client, email="intruso@teste.com")
+    resposta = await client.post(f"/pedidos/templates/{template['id']}/usar", headers=intruso)
+    assert resposta.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_cancelar_pedido(client):
+    headers = await criar_e_logar(client)
+    pedido = (await client.post("/pedidos/", json={}, headers=headers)).json()
+
+    resposta = await client.post(f"/pedidos/{pedido['id']}/cancelar", headers=headers)
+    assert resposta.status_code == 200
+    assert "cancelado" in resposta.json()["mensagem"]
+
+    verificacao = await client.get(f"/pedidos/{pedido['id']}", headers=headers)
+    assert verificacao.json()["status"] == "CANCELADO"
+
+
+@pytest.mark.asyncio
+async def test_cancelar_pedido_ja_cancelado_da_400(client):
+    headers = await criar_e_logar(client)
+    pedido = (await client.post("/pedidos/", json={}, headers=headers)).json()
+    await client.post(f"/pedidos/{pedido['id']}/cancelar", headers=headers)
+
+    resposta = await client.post(f"/pedidos/{pedido['id']}/cancelar", headers=headers)
+    assert resposta.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_cancelar_pedido_de_outro_da_403(client):
+    dono = await criar_e_logar(client, email="dono@teste.com")
+    pedido = (await client.post("/pedidos/", json={}, headers=dono)).json()
+
+    intruso = await criar_e_logar(client, email="intruso@teste.com")
+    resposta = await client.post(f"/pedidos/{pedido['id']}/cancelar", headers=intruso)
+    assert resposta.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_remover_cupom_volta_preco_cheio(client):
+    admin = await criar_e_logar(client, email="admin@teste.com", admin=True)
+    await client.post(
+        "/pedidos/cupons", json={"codigo": "PROMO20", "percentual_desconto": 20}, headers=admin
+    )
+
+    headers = await criar_e_logar(client, email="cliente@teste.com")
+    pedido = (await client.post("/pedidos/", json={}, headers=headers)).json()
+    await client.post(
+        f"/pedidos/{pedido['id']}/itens",
+        json={"quantidade": 1, "sabor": "X", "tamanho": "M", "preco_unitario": 100.0},
+        headers=headers,
+    )
+    await client.post(
+        f"/pedidos/{pedido['id']}/aplicar-cupom", json={"codigo": "PROMO20"}, headers=headers
+    )
+
+    resposta = await client.delete(f"/pedidos/{pedido['id']}/cupom", headers=headers)
+    assert resposta.status_code == 200
+    assert resposta.json()["preco"] == 100.0
+    assert resposta.json()["cupom_codigo"] is None
+
+
+@pytest.mark.asyncio
+async def test_remover_cupom_sem_cupom_aplicado_da_400(client):
+    headers = await criar_e_logar(client)
+    pedido = (await client.post("/pedidos/", json={}, headers=headers)).json()
+
+    resposta = await client.delete(f"/pedidos/{pedido['id']}/cupom", headers=headers)
+    assert resposta.status_code == 400
+
+
 async def test_token_expirado_da_401(client):
     with freeze_time("2026-01-01 12:00:00"):
         headers = await criar_e_logar(client)

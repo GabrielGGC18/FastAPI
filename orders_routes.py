@@ -8,13 +8,18 @@ proprios pedidos; um admin mexe em qualquer um. Isso esta centralizado em
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from dependencies import pegar_sessao, verificar_token
-from models import ItemPedido, Pedido, StatusPedido, Usuario
+from dependencies import pegar_sessao, verificar_admin, verificar_token
+from models import Cupom, ItemPedido, ItemTemplate, Pedido, PedidoTemplate, StatusPedido, Usuario
 from schemas import (
+    AplicarCupomSchema,
     ItemPedidoSchema,
     ItemPedidoUpdate,
     PedidoResponse,
     PedidoSchema,
+    CupomResponse,
+    CupomSchema,
+    PedidoTemplateResponse,
+    PedidoTemplateSchema,
     ResponseMensagem,
 )
 
@@ -67,6 +72,16 @@ async def _pedido_autorizado(
             detail = "Você não tem permissão sobre este pedido",
         )
     return pedido
+async def _recalcular_preco(pedido: Pedido, session: AsyncSession) -> float:
+    """Recalcula preco do pedido aplicando o desconto do cupom, se houver."""
+    percentual = 0.0
+    if pedido.cupom_codigo:
+        cupom = await session.scalar(select(Cupom).where(Cupom.codigo == pedido.cupom_codigo))
+        if cupom and cupom.ativo:
+            percentual = cupom.percentual_desconto
+    return pedido.calcular_preco(percentual)
+
+
 def _exigir_pendente(pedido: Pedido) -> None:
     """Pedido Cancelado, finalizado ou Imutável."""
     if pedido.status != StatusPedido.PENDENTE:
@@ -113,12 +128,13 @@ async def adicionar_item(
         tamanho=item_schema.tamanho,
         preco_unitario=item_schema.preco_unitario,
         pedido_id=pedido.id,
+        observacao=item_schema.observacao,
     )
 
     session.add(item)
     await session.flush() #Empurra o INSERT para o banco sem fechar a transacao, assim `pedido.itens` ja enxerga o item novo.
     await session.refresh(pedido)
-    pedido.calcular_preco()
+    await _recalcular_preco(pedido, session)
     await session.commit()
     await session.refresh(pedido)
     return pedido 
@@ -143,7 +159,7 @@ async def remover_item(
     await session.flush()
     await session.refresh(pedido)
 
-    pedido.calcular_preco()
+    await _recalcular_preco(pedido, session)
     await session.commit()
     await session.refresh(pedido)
 
@@ -161,6 +177,7 @@ async def cancelar_pedido(
     
     pedido.status = StatusPedido.CANCELADO
     await session.commit()
+    await session.refresh(pedido)
 
     return ResponseMensagem(mensagem=f"Pedido {pedido.id} cancelado")
 
@@ -203,14 +220,215 @@ async def atualizar_item(
     _exigir_pendente(pedido)
 
     # Atualiza apenas os campos fornecidos
-    for field, value in item_update.dict(exclude_unset=True).items():
+    for field, value in item_update.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
 
     await session.flush()
     await session.refresh(pedido)
 
-    pedido.calcular_preco()
+    await _recalcular_preco(pedido, session)
     await session.commit()
     await session.refresh(pedido)
 
     return pedido
+
+# ------------------------------------------------------------------ cupom
+
+
+@order_routes.post("/cupons", response_model=CupomResponse, status_code=status.HTTP_201_CREATED)
+async def criar_cupom(
+    
+    dados: CupomSchema,
+    session: Annotated[AsyncSession, Depends(pegar_sessao)],
+    usuario: Annotated[Usuario, Depends(verificar_admin)],
+):
+    """So admin cria cupom."""
+    existente = await session.scalar(select(Cupom).where(Cupom.codigo == dados.codigo))
+    if existente:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cupom ja existe")
+
+    cupom = Cupom(codigo=dados.codigo, percentual_desconto=dados.percentual_desconto)
+    session.add(cupom)
+    await session.commit()
+    await session.refresh(cupom)
+    return cupom
+
+
+@order_routes.post("/{id_pedido}/aplicar-cupom", response_model=PedidoResponse)
+async def aplicar_cupom(
+    id_pedido: int,
+    dados: AplicarCupomSchema,
+    session: Annotated[AsyncSession, Depends(pegar_sessao)],
+    usuario: Annotated[Usuario, Depends(verificar_token)],
+):
+    pedido = await _pedido_autorizado(id_pedido, session, usuario)
+    _exigir_pendente(pedido)
+
+    cupom = await session.scalar(select(Cupom).where(Cupom.codigo == dados.codigo))
+    if not cupom or not cupom.ativo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cupom invalido ou inativo",
+        )
+
+    pedido.cupom_codigo = cupom.codigo
+    await _recalcular_preco(pedido, session)
+    await session.commit()
+    await session.refresh(pedido)
+
+    return pedido
+
+
+@order_routes.delete("/{id_pedido}/cupom", response_model=PedidoResponse)
+async def remover_cupom(
+    id_pedido: int,
+    session: Annotated[AsyncSession, Depends(pegar_sessao)],
+    usuario: Annotated[Usuario, Depends(verificar_token)],
+):
+    """Desfaz o cupom aplicado, recalcula preco sem desconto."""
+    pedido = await _pedido_autorizado(id_pedido, session, usuario)
+    _exigir_pendente(pedido)
+
+    if not pedido.cupom_codigo:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pedido não tem cupom aplicado",
+        )
+
+    pedido.cupom_codigo = None
+    await _recalcular_preco(pedido, session)
+    await session.commit()
+    await session.refresh(pedido)
+
+    return pedido
+
+
+# --------------------------------------------------------------- duplicar
+
+
+@order_routes.post("/{id_pedido}/duplicar", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
+async def duplicar_pedido(
+    id_pedido: int,
+    session: Annotated[AsyncSession, Depends(pegar_sessao)],
+    usuario: Annotated[Usuario, Depends(verificar_token)],
+):
+    """Clona um pedido antigo (itens inclusos) num pedido PENDENTE novo."""
+    pedido_original = await _pedido_autorizado(id_pedido, session, usuario)
+
+    novo_pedido = Pedido(usuario_id=pedido_original.usuario_id)
+    session.add(novo_pedido)
+    await session.flush()
+
+    for item in pedido_original.itens:
+        session.add(
+            ItemPedido(
+                quantidade=item.quantidade,
+                sabor=item.sabor,
+                tamanho=item.tamanho,
+                preco_unitario=item.preco_unitario,
+                pedido_id=novo_pedido.id,
+                observacao=item.observacao,
+            )
+        )
+
+    await session.flush()
+    await session.refresh(novo_pedido)
+    novo_pedido.calcular_preco()
+    await session.commit()
+    await session.refresh(novo_pedido)
+
+    return novo_pedido
+
+
+# --------------------------------------------------------------- templates
+
+
+@order_routes.post("/templates", response_model=PedidoTemplateResponse, status_code=status.HTTP_201_CREATED)
+async def criar_template(
+    dados: PedidoTemplateSchema,
+    session: Annotated[AsyncSession, Depends(pegar_sessao)],
+    usuario: Annotated[Usuario, Depends(verificar_token)],
+):
+    template = PedidoTemplate(nome=dados.nome, usuario_id=usuario.id)
+    session.add(template)
+    await session.flush()
+
+    for item in dados.itens:
+        session.add(
+            ItemTemplate(
+                quantidade=item.quantidade,
+                sabor=item.sabor,
+                tamanho=item.tamanho,
+                preco_unitario=item.preco_unitario,
+                template_id=template.id,
+            )
+        )
+
+    await session.commit()
+    await session.refresh(template)
+    return template
+
+
+@order_routes.get("/templates", response_model=list[PedidoTemplateResponse])
+async def listar_templates(
+    session: Annotated[AsyncSession, Depends(pegar_sessao)],
+    usuario: Annotated[Usuario, Depends(verificar_token)],
+):
+    resultado = await session.scalars(
+        select(PedidoTemplate).where(PedidoTemplate.usuario_id == usuario.id)
+    )
+    return resultado.all()
+
+
+async def _template_autorizado(id_template: int, session: AsyncSession, usuario: Usuario) -> PedidoTemplate:
+    template = await session.scalar(select(PedidoTemplate).where(PedidoTemplate.id == id_template))
+    if not template:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template não encontrado")
+    if not usuario.admin and template.usuario_id != usuario.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Você não tem permissão sobre este template")
+    return template
+
+
+@order_routes.delete("/templates/{id_template}", response_model=ResponseMensagem)
+async def remover_template(
+    id_template: int,
+    session: Annotated[AsyncSession, Depends(pegar_sessao)],
+    usuario: Annotated[Usuario, Depends(verificar_token)],
+):
+    template = await _template_autorizado(id_template, session, usuario)
+    await session.delete(template)
+    await session.commit()
+    return ResponseMensagem(mensagem=f"Template {id_template} removido")
+
+
+@order_routes.post("/templates/{id_template}/usar", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
+async def usar_template(
+    id_template: int,
+    session: Annotated[AsyncSession, Depends(pegar_sessao)],
+    usuario: Annotated[Usuario, Depends(verificar_token)],
+):
+    """Cria um pedido PENDENTE novo a partir dos itens do template."""
+    template = await _template_autorizado(id_template, session, usuario)
+
+    novo_pedido = Pedido(usuario_id=usuario.id)
+    session.add(novo_pedido)
+    await session.flush()
+
+    for item in template.itens:
+        session.add(
+            ItemPedido(
+                quantidade=item.quantidade,
+                sabor=item.sabor,
+                tamanho=item.tamanho,
+                preco_unitario=item.preco_unitario,
+                pedido_id=novo_pedido.id,
+            )
+        )
+
+    await session.flush()
+    await session.refresh(novo_pedido)
+    novo_pedido.calcular_preco()
+    await session.commit()
+    await session.refresh(novo_pedido)
+
+    return novo_pedido

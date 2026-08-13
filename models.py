@@ -83,6 +83,7 @@ class Pedido(Base):
     )
     usuario_id = Column("usuario_id", Integer, ForeignKey("usuarios.id"), nullable=False)
     preco = Column("preco", Float, default=0.0)
+    cupom_codigo = Column("cupom_codigo", String, nullable=True)
 
     usuario = relationship("Usuario", back_populates="pedidos")
     itens = relationship(
@@ -97,14 +98,29 @@ class Pedido(Base):
         self.status = status
         self.preco = preco
 
-    def calcular_preco(self):
-        """Recalcula o total a partir dos itens.
+    def calcular_preco(self, percentual_desconto: float = 0.0):
+        """Recalcula o total a partir dos itens, com desconto opcional.
 
         Preco e dado derivado: nunca aceite ele do cliente, sempre recalcule
         no servidor apos qualquer mudanca na lista de itens.
         """
-        self.preco = sum(item.preco_unitario * item.quantidade for item in self.itens)
+        subtotal = sum(item.preco_unitario * item.quantidade for item in self.itens)
+        self.preco = subtotal * (1 - percentual_desconto / 100)
         return self.preco
+
+
+class Cupom(Base):
+    __tablename__ = "cupons"
+
+    id = Column("id", Integer, primary_key=True, autoincrement=True)
+    codigo = Column("codigo", String, nullable=False, unique=True, index=True)
+    percentual_desconto = Column("percentual_desconto", Float, nullable=False)
+    ativo = Column("ativo", Boolean, default=True)
+
+    def __init__(self, codigo, percentual_desconto, ativo=True):
+        self.codigo = codigo
+        self.percentual_desconto = percentual_desconto
+        self.ativo = ativo
 
 
 class ItemPedido(Base):
@@ -115,18 +131,61 @@ class ItemPedido(Base):
     sabor = Column("sabor", String, nullable=False)
     tamanho = Column("tamanho", String, nullable=False)
     preco_unitario = Column("preco_unitario", Float, nullable=False)
+    observacao = Column("observacao", String, nullable=True)
     pedido_id = Column("pedido_id", Integer, ForeignKey("pedidos.id"), nullable=False)
 
     # Guardamos o preco no momento da compra: se a pizzaria reajustar a tabela
     # amanha, o pedido de hoje continua valendo o preco de hoje.
     pedido = relationship("Pedido", back_populates="itens")
 
-    def __init__(self, quantidade, sabor, tamanho, preco_unitario, pedido_id):
+    def __init__(self, quantidade, sabor, tamanho, preco_unitario, pedido_id, observacao=None):
         self.quantidade = quantidade
         self.sabor = sabor
         self.tamanho = tamanho
         self.preco_unitario = preco_unitario
         self.pedido_id = pedido_id
+        self.observacao = observacao
+
+
+class PedidoTemplate(Base):
+    """Combinacao de itens salva pelo usuario para reusar depois."""
+
+    __tablename__ = "pedido_templates"
+
+    id = Column("id", Integer, primary_key=True, autoincrement=True)
+    nome = Column("nome", String, nullable=False)
+    usuario_id = Column("usuario_id", Integer, ForeignKey("usuarios.id"), nullable=False)
+
+    itens = relationship(
+        "ItemTemplate",
+        back_populates="template",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    def __init__(self, nome, usuario_id):
+        self.nome = nome
+        self.usuario_id = usuario_id
+
+
+class ItemTemplate(Base):
+    __tablename__ = "itens_template"
+
+    id = Column("id", Integer, primary_key=True, autoincrement=True)
+    quantidade = Column("quantidade", Integer, nullable=False)
+    sabor = Column("sabor", String, nullable=False)
+    tamanho = Column("tamanho", String, nullable=False)
+    preco_unitario = Column("preco_unitario", Float, nullable=False)
+    template_id = Column("template_id", Integer, ForeignKey("pedido_templates.id"), nullable=False)
+
+    template = relationship("PedidoTemplate", back_populates="itens")
+
+    def __init__(self, quantidade, sabor, tamanho, preco_unitario, template_id):
+        self.quantidade = quantidade
+        self.sabor = sabor
+        self.tamanho = tamanho
+        self.preco_unitario = preco_unitario
+        self.template_id = template_id
 
 
 def criar_banco():
